@@ -46,6 +46,19 @@ void Preprocess::process(const livox_ros_driver::CustomMsg::ConstPtr &msg,
                          PointCloudXYZI::Ptr &wire_out)
 {
     avia_handler(msg);
+
+    // 给 surf 点打标签
+    for (auto &pt : pl_surf.points)
+    {
+        pt.intensity = 1.0;   // 标记为 surf
+    }
+
+    // 给 wire 点打标签
+    for (auto &pt : pl_wire.points)
+    {
+        pt.intensity = 2.0;   // 标记为 wire
+    }
+
     *surf_out = pl_surf;
     *wire_out = pl_wire;
 }

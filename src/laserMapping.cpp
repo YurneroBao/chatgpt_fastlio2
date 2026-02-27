@@ -120,6 +120,8 @@ PointCloudXYZI::Ptr _featsArray;
 
 pcl::VoxelGrid<PointType> downSizeFilterSurf;
 pcl::VoxelGrid<PointType> downSizeFilterMap;
+pcl::VoxelGrid<PointType> downSizeFilterWire;
+
 
 KD_TREE<PointType> ikdtree;
 
@@ -386,9 +388,15 @@ bool sync_packages(MeasureGroup &meas)
     /*** push a lidar scan ***/
     if(!lidar_pushed)
     {
-        meas.lidar_surf = lidar_buffer_surf.front();
-        meas.lidar_wire = lidar_buffer_wire.front();
-        meas.lidar = meas.lidar_surf;
+        PointCloudXYZI::Ptr merged(new PointCloudXYZI());
+        *merged += *(lidar_buffer_surf.front());
+        *merged += *(lidar_buffer_wire.front());
+
+        meas.lidar = merged;
+
+        lidar_buffer_surf.pop_front();
+        lidar_buffer_wire.pop_front();
+
         meas.lidar_beg_time = time_buffer.front();
 
 
@@ -882,6 +890,7 @@ int main(int argc, char** argv)
     memset(point_selected_surf, true, sizeof(point_selected_surf));
     memset(res_last, -1000.0f, sizeof(res_last));
     downSizeFilterSurf.setLeafSize(filter_size_surf_min, filter_size_surf_min, filter_size_surf_min);
+    downSizeFilterWire.setLeafSize(0.1, 0.1, 0.1);
     downSizeFilterMap.setLeafSize(filter_size_map_min, filter_size_map_min, filter_size_map_min);
     memset(point_selected_surf, true, sizeof(point_selected_surf));
     memset(res_last, -1000.0f, sizeof(res_last));
@@ -960,6 +969,23 @@ int main(int argc, char** argv)
             feats_down_body_surf->clear();
             feats_down_body_wire->clear();
 
+            for (auto &pt : feats_undistort->points)
+            {
+                if (pt.intensity == 1.0)
+                    feats_down_body_surf->push_back(pt);
+                else if (pt.intensity == 2.0)
+                    feats_down_body_wire->push_back(pt);
+            }
+            
+            // ===========================
+            // 分别下采样
+            // ===========================
+            downSizeFilterSurf.setInputCloud(feats_down_body_surf);
+            downSizeFilterSurf.filter(*feats_down_body_surf);
+
+            downSizeFilterWire.setInputCloud(feats_down_body_wire);
+            downSizeFilterWire.filter(*feats_down_body_wire);
+
             *feats_down_body_surf = *(Measures.lidar_surf);
             *feats_down_body_wire = *(Measures.lidar_wire);
 
@@ -979,6 +1005,8 @@ int main(int argc, char** argv)
 
             /*** downsample the feature points in a scan ***/
             downSizeFilterSurf.setInputCloud(feats_undistort);
+
+
             downSizeFilterSurf.filter(*feats_down_body);
             t1 = omp_get_wtime();
             feats_down_size = feats_down_body->points.size();
